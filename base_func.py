@@ -703,13 +703,3 @@ def plot_correlation(correlation,ax=None,figsize=(8,6),c_map = None):
     plt.pyplot.ylabel("Residue Index", fontsize=14)
     if show:
         fig.show()
-    # corr = np.zeros(correlate[0].shape)
-    # diff = -np.ones(correlate[0].shape)
-    # for i in range(correlate[0].shape[0]):
-    #     for j in range(i,correlate[0].shape[1]):
-    #         corr[j][i] = correlate[0][i][j] #上三角
-    #         corr[i][j] = correlate[1][i][j] #下三角
-    #         diff_ = correlate[0][i][j]-correlate[1][i][j]
-    #         if abs(diff_) >= diff_threshold:
-    #             diff[j][i] = correlate[0][i][j]
-    #             diff[i][j] = correlate[1][i][j]
