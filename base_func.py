@@ -109,7 +109,7 @@ class Network(object):
         self.community_analysis(self.protein_graph) 
         self.calc_centrality(self.protein_graph)                        #self.communities and self.modularity_q ,self.centrality
         if paths_source and paths_sink:
-            self.suboptmal_paths_1(self.protein_graph,paths_source,paths_sink,paths_num)   #self.paths
+            self.suboptmal_paths_1(paths_source,paths_sink,paths_num)   #self.paths
 
     def _load_traj(self,traj_files):
         '''
@@ -246,7 +246,7 @@ class Network(object):
         self.protein_graph.add_nodes_from(nodes)
         self.protein_graph.add_weighted_edges_from(weighted_edges)   
 
-    def community_analysis(self,G):
+    def community_analysis(self,G=self.protein_graph):
         '''
         community analysis by Girvan–Newman algorithm, generate self.community and self.modularity_q attributes,which present protein communities and correspond modularity q value 
         '''
@@ -258,7 +258,7 @@ class Network(object):
             self.communities.append(c)
             self.modularity_q.append(nx.algorithms.community.quality.modularity(G,c))
 
-    def calc_centrality(self,G):
+    def calc_centrality(self,G=self.protein_graph):
         '''
         calculate nodes centrality, node centralities that assess the density of connections per node.
         reference: 
@@ -294,7 +294,7 @@ class Network(object):
         self.centrality = eigenvectors[:,np.where(eigenvalues==max(eigenvalues))[0][0]]
         self.centrality = abs(self.centrality)/max(abs(self.centrality))
 
-    def calc_shortest_path(self,G):
+    def calc_shortest_path(self,G=self.protein_graph):
         '''
         find the any pair node's shortest path for all pairs node in graph
         ''' 
@@ -302,7 +302,7 @@ class Network(object):
         nodes_axis = range(1, num_nodes + 1)    
         self.shortest_path_dict = nx.all_pairs_dijkstra_path(G)
 
-    def suboptmal_paths_1(self,G,source,sink,desire_N=500):
+    def suboptmal_paths_1(self,source,sink,G=self.protein_graph,desire_N=500):
         '''
         find suboptmal paths for a pair of node
         -----------------------------------------
