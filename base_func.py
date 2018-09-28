@@ -11,7 +11,7 @@ import string
 import scipy as sp
 import matplotlib as plt
 from math import exp,log,sqrt
-if 'ipykernel' in sys.modules:              #if the module is running in notebook
+if 'ipykernel' in sys.modules:              #whether the module is running in notebook
     from tqdm import tqdm_notebook as tqdm
 else:
     from tqdm import tqdm
