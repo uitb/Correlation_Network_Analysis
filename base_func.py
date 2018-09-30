@@ -19,7 +19,7 @@ else:
 
 class Network(object):
     __doc__ = '''
-    read trajs form traj files and first calculate residue correlation, then construct graph that all nodes correspond to residues. analysis communities and paths.
+    read trajs form traj files and calculate residue correlation, then construct graph from trajctory and correlations, analysis communities and paths for source node and sink node.
     -----------------------------------------
     Attributes:
     traj: { mdtraj.core.trajectory.Trajectory }
@@ -38,7 +38,7 @@ class Network(object):
     centrality: { list }
             centrality value for per node.
     paths: { dict }
-            N suboptmal paths for all pairs of source and sink nodes, include shortest path, in all child list, the first element is path length and after it is the path nodes.
+            N suboptmal paths for all pairs of source and sink nodes, include the shortest path, all list content a path nodes and the first element is the length for the path.
     hotpots: { dict }
             hotpots for all pairs of source and sink nodes.
     path_num: [ list ]
@@ -64,7 +64,7 @@ class Network(object):
         paths_source=None,paths_sink=None,paths_num=500):
         '''
         traj_files: { str or list }
-                traj file name or lists of traj file's name.
+                traj file name or lists of traj file's name or mdtraj Trajectory.
         top: { str or mdtraj.core.trajectory.Trajectory }
                 pdb file name or matraj topfile.
         stride: { int } optional, default = 1
@@ -82,7 +82,7 @@ class Network(object):
         correlation_threshold: { float } optional, default = 0.6
                 the corelation value to generate edge.
         paths_source and paths_sink: { int } optional, default = None
-                the start and end node in graph to find paths, default is None, not find any paths. if not provide this, you could call suboptmal_paths_1 mathod to find paths and generate self.paths attribute
+                the start and end node in graph to find paths, default is None, not find any paths. if not provide this, you could call suboptmal_paths function to find paths.
         paths_num: { int } optional, default = 500
                 How many paths needed.
         '''
@@ -125,7 +125,7 @@ class Network(object):
         read trajectory from a traj file or a lists of traj files
         -----------------------------------------
         traj_files: { str or list } optional, default = None
-                traj file name or lists of traj files name
+                traj file name or lists of traj files name or or mdtraj Trajectory
         top: { str or mdtraj.core.trajectory.Trajectory }
                 pdb file name or matraj topfile.
         '''
@@ -149,7 +149,7 @@ class Network(object):
 
         # read traj
         if isinstance(self.traj,md.core.trajectory.Trajectory):
-            pass
+            self.traj = [self._start:self._end:self._stride]
         else:
             self.traj = None
             if not self._lazy_load:
@@ -380,9 +380,9 @@ class Network(object):
         find suboptmal paths for a pair of node
         -----------------------------------------
         source and sink: { int }
-                        the start node and end node for find paths
+                the start node and end node for find paths
         desire_N: { int } optional, default=500
-                        how many paths needed.
+                how many paths needed.
         '''
         if self.protein_graph == None:
             raise ValueError,'protein graph is None!'
@@ -434,8 +434,8 @@ class Visualization(object):
     -----------------------------------------
     Functions:
     path()s: generate a pymol script (pdb_name_paths.pml) for show paths in pymol;
-    community(community_partition): generate a pymol script (pdb_name_community.pml) for show communities in pymol;
-    plot_depiction_communities(community_partition,ax,radius,xr,yr,zr,R): depiction communities by different color and size circles.
+    community(): generate a pymol script (pdb_name_community.pml) for show communities in pymol;
+    plot_depiction_communities(): depiction communities by different color and size circles.
     '''
     def __init__(self,network,pdb_filename,colors = None,out_dir=None):
         '''
@@ -514,7 +514,7 @@ class Visualization(object):
         generate a pymol script (pdb_name_community.pml) for show communities in pymol, need to open pymol by oneself
         -----------------------------------------
         community_partition: { int }
-                    which number of iterations in Girvan–Newman algorithms, could select by index of the max modularity Q value
+                the partition index, could select with the maximum modularity score index
         '''
         community = self.network.communities[community_partition]
         pdb_name = ''
@@ -533,7 +533,7 @@ class Visualization(object):
         calculate two communities' correlation
         -----------------------------------------
         community_partition: { int }
-                    which number of iterations in Girvan–Newman algorithms, could select by index of the max modularity Q value
+                the partition index, could select with the maximum modularity score index
         '''
         community = self.network.communities[community_partition] 
         c_correlation = np.zeros((len(community),len(community)))
@@ -569,14 +569,14 @@ class Visualization(object):
         depiction communities by different color and size circles, one could use radius, xr, yr, zr, R parameters to adjust the angle of view
         -----------------------------------------
         community_partition: { int }
-                    which number of iterations in Girvan–Newman algorithms, could select by index of the max modularity Q value
+                the partition index, could select with the maximum modularity score index
         ax: { matplotlib.axes._subplots.AxesSubplot } optional,default = None
         radius: { float } optional, default = 1.0
-                    the base size of circles.
+                the base size of circles.
         xr,yr,zr: { float } optional, default = 0
-                    the angle for rotation in x y z axis, in radian unit
+                the angle for rotation in x y z axis, in radian unit
         R: { float } optional,default = 10.0
-                    the distance of view
+                the distance of view
 
         '''
         community_xy,community_r = self._depiction_communities_position(community_partition,radius,xr,yr,zr,R)
@@ -602,13 +602,13 @@ class Visualization(object):
         calculate the position and size for all circles
         -----------------------------------------
         community_partition: { int }
-                    which number of iterations in Girvan–Newman algorithms, could select by index of the max modularity Q value
+                the partition index, could select with the maximum modularity score index
         radius: { float } optional, default = 1.0
-                    the base size of circles.
+                the base size of circles.
         xr,yr,zr: { float } optional, default = 0
-                    the angle for rotation in x y z axis, in radian unit
+                the angle for rotation in x y z axis, in radian unit
         R: { float } optional,default = 10.0
-                    the distance of view
+                the distance of view
         '''
         top = self.network.top
         ca_index = top.topology.select('name CA')
@@ -636,7 +636,7 @@ def DataLoad(file_name):
     load data from saved file
     -----------------------------------------
     file_name: { str }
-                file path and name to load data.
+            file path and name to load data.
     '''
     try:
         with open(file_name,'rb') as f:
@@ -650,7 +650,7 @@ def DataSave(file_name,data):
     save data
     -----------------------------------------
     file_name: { str }
-                file path and name to store data.
+            file path and name to store data.
     data: { any type }
     '''
     try:
@@ -664,7 +664,7 @@ def find_the_nearest_res_to_centroid(xyz_list):
     find the nearest residue to all coordinate geometric center.
     -----------------------------------------
     xyz_list: { array-like }
-                a list of residue coordinate.
+            a list of residue coordinate.
     '''
     xyz_list = np.array(xyz_list)
     if len(xyz_list) == 1:
@@ -686,7 +686,7 @@ def find_the_center_res_for_community(communities,pdb):
     -----------------------------------------
     communities: { list }
     pdb: { str }
-                pdb file path and name.
+            pdb file path and name.
     '''
     pdb_top = md.load(pdb)
     pdb_xyz = pdb_top.xyz[0]
@@ -705,10 +705,10 @@ def plot_correlation(correlation,ax=None,figsize=(8,6),c_map = None):
     plot correlation
     -----------------------------------------
     correlation: { array-like }
-                the correlation matrix
+            the correlation matrix
     ax: { matplotlib.axes._subplots.AxesSubplot } optional, default = None
     figsize: { tuple } optional,default = (8,6)
-                the size for fig, only need for ax == None.
+            the size for fig, only need for ax == None.
     c_map: { matplotlib.colors.LinearSegmentedColormap }
     '''
     if not ax:
