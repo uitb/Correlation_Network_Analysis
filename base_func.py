@@ -148,8 +148,8 @@ class Network(object):
         self._deal_top(self.top)
 
         # read traj
-        if isinstance(self.traj,md.core.trajectory.Trajectory):
-            self.traj = self.traj[self._start:self._end:self._stride]
+        if isinstance(self.traj_files,md.core.trajectory.Trajectory):
+            self.traj = self.traj_files[self._start:self._end:self._stride]
         else:
             self.traj = None
             if not self._lazy_load:
