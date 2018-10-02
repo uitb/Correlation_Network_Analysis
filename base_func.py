@@ -149,7 +149,7 @@ class Network(object):
 
         # read traj
         if isinstance(self.traj,md.core.trajectory.Trajectory):
-            self.traj = [self._start:self._end:self._stride]
+            self.traj = self.traj[self._start:self._end:self._stride]
         else:
             self.traj = None
             if not self._lazy_load:
