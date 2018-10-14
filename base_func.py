@@ -9,7 +9,7 @@ import copy
 import time
 import string
 import scipy as sp
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import math
 if 'ipykernel' in sys.modules:              #whether the module is running in notebook
     from tqdm import tqdm_notebook as tqdm
@@ -723,9 +723,9 @@ def plot_correlation(correlation,ax=None,figsize=(8,6),c_map = None):
 
     heatmap = ax.pcolor(correlation, cmap=c_map, vmin=-1, vmax=1)
     cbar = plt.pyplot.colorbar(heatmap, orientation="vertical",ax=ax)
-    plt.pyplot.xticks(range(0,len(correlation),100)+[len(correlation)])
-    plt.pyplot.yticks(range(0,len(correlation),100)+[len(correlation)])
-    plt.pyplot.xlabel('Residue Index', fontsize=14)
-    plt.pyplot.ylabel("Residue Index", fontsize=14)
+    plt.xticks(range(0,len(correlation),100)+[len(correlation)])
+    plt.yticks(range(0,len(correlation),100)+[len(correlation)])
+    plt.xlabel('Residue Index', fontsize=14)
+    plt.ylabel("Residue Index", fontsize=14)
     if show:
         fig.show()
