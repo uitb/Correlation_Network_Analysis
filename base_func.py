@@ -60,7 +60,7 @@ class Network(object):
     '''
 
     def __init__(self,traj_files=None,top=None,stride = 1,lazy_load = False,traj_start=None,traj_end=None,auto_build=True,
-        contact_distance = 10.0,contact_ratio=0.75,correlation_threshold=0.6,
+        contact_distance = 10.0,contact_ratio=0.75,correlation_threshold=0.6,hot_threshold=0.5,
         paths_source=None,paths_sink=None,paths_num=500):
         '''
         traj_files: { str or list }
@@ -101,12 +101,13 @@ class Network(object):
         self._contact_distance = contact_distance
         self._contact_ratio = contact_ratio
         self._correlation_threshold = correlation_threshold
+        self._hot_threshold = hot_threshold
         if auto_build:
             self.load_traj()                            #self.traj\self.residue_num\self.traj_length
             self.correlation_analysis()                                #self.correlation
             self.construct_graph()                                         #self.protein_graph\#self.communities\self.modularity_q ,self.centrality                     
             if paths_source and paths_sink:
-                self.suboptmal_paths(paths_source,paths_sink,paths_num)   #self.paths
+                self.suboptmal_paths(paths_source,paths_sink,paths_num,hot_threshold=hot_threshold)   #self.paths
             else:
                 self.paths = None
         else:
@@ -198,21 +199,20 @@ class Network(object):
             raise ValueError,'trajctory is None, you need to read trajctory from traj files by load_traj() function!'
         total_frames = self.traj_length
         atoms = self.top.topology.select('name CA')
-        xyz = [np.array(self.traj.xyz[:,i]) for i in atoms]
+        xyz = np.array([np.array(self.traj.xyz[:,i]) for i in atoms])   #shape=(self.residue_num,total_frames,3)
         self.correlation = np.zeros((self.residue_num, self.residue_num))
-        
+       
         mean = np.mean(xyz,axis=1)
         delta = np.array([xyz[i]-mean[i] for i in range(self.residue_num)])
         mean_dot = np.array([np.mean(np.array([np.dot(d[m],d[m]) for m in range(total_frames)])) for d in delta ])
         mean_dot_sqrt = np.sqrt(mean_dot)
-        total = reduce(lambda x,y:x + y,range(self.residue_num)) + self.residue_num
+        #total = reduce(lambda x,y:x + y,range(self.residue_num)) + self.residue_num
         
-        for i in tqdm(range(self.residue_num),desc='{}'.format(self.residue_num),file=sys.stdout,position=0,):
+        for i in tqdm(range(self.residue_num),desc='{}'.format(self.residue_num),leave=False,file=sys.stdout,position=0,):
             for j in tqdm(range(i,self.residue_num),desc='{}'.format(self.residue_num-i),leave=False,file=sys.stdout,position=1):
                 CovIJ = np.mean(np.array([np.dot(delta[i,m],delta[j,m]) for m in range(total_frames)]))
                 self.correlation[i,j] = CovIJ/(mean_dot_sqrt[i]*mean_dot_sqrt[j])
                 self.correlation[j,i] = self.correlation[i,j]   
-
     def save_correlation(self,correlation_file):
         '''Save correlation to a file.
         -----------------------------------------
@@ -375,7 +375,7 @@ class Network(object):
         #nodes_axis = range(1, num_nodes + 1)    
         self.shortest_path_dict = nx.all_pairs_dijkstra_path(self.protein_graph)
 
-    def suboptmal_paths(self,source,sink,desire_N=500):
+    def suboptmal_paths(self,source,sink,desire_N=500,hot_threshold=0.5):
         '''
         find suboptmal paths for a pair of node
         -----------------------------------------
@@ -392,7 +392,7 @@ class Network(object):
             path = simple_paths.next()
             length = self._get_path_length(path)
             paths_.append([length] + path)
-        hotpots = self._hotpots(paths_)
+        hotpots = self._hotpots(paths_,threshold=hot_threshold)
 
         try:
             self.paths[(source,sink)] = paths_
@@ -400,9 +400,10 @@ class Network(object):
             self.paths = dict()
             self.paths[(source,sink)] = paths_
         try:
-            self.paths_num.append(desire_N)
+            self.paths_num[(source,sink)] = desire_N
         except:
-             self.paths_num = [desire_N]
+            self.paths_num = dict()
+            self.paths_num[(source,sink)] = desire_N
         try:
             self.hotpots[(source,sink)] = hotpots
         except:
@@ -420,12 +421,17 @@ class Network(object):
             length += self.protein_graph.get_edge_data(path[i],path[i+1]).get('weight',0)
         return length
 
-    def _hotpots(self,paths):
+    def _hotpots(self,paths,threshold=0.5):
         '''find hotpots in suboptmal pahts,hotpots mean that all suboptmal paths will pass them '''
-        hot_nodes = paths[0][1:]
+        nodes_occurrence_rate =dict()
+        N_paths = len(paths)
         for path in paths:
-            hot_nodes = np.intersect1d(hot_nodes,path[1:])
-        hots = [str(self.top.top.residue(h)) for h in hot_nodes]
+            for node in path:
+                try:
+                    nodes_occurrence_rate[node] += 1.0/N_paths
+                except:
+                    nodes_occurrence_rate[node] = 1.0/N_paths
+        hots = [str(self.top.top.residue(k)) for k,v in nodes_occurrence_rate.items() if v>=threshold]
         return hots
 
 class Visualization(object):
@@ -471,7 +477,7 @@ class Visualization(object):
         generate a pymol script (pdb_name_paths.pml) for show paths in pymol, need to open pymol by oneself
         '''
         subtimal_paths = self.network.paths
-        top = self.network.top
+        top = md.load(self.pdb)
         paths = []
         for k,v in subtimal_paths.items():
             path = []
@@ -484,18 +490,27 @@ class Visualization(object):
                 f.write('set_color color{}={}\n'.format(i,c))
             f.write('load {}\n'.format(self.pdb))
             for i,paths_ in enumerate(paths):                                       # paths contant multiple paths for different source and sink nodes
-                for j in range(len(paths_[0])-1):                          # the shortest path, separated to overstriking
-                    res1 = top.top.residue(paths_[0][j]).index+1
-                    res2 = top.top.residue(paths_[0][j+1]).index+1
-                    f.write('distance {}_p{}_{}_{},{}///{}/CA,{}///{}/CA\n'.format(self.pdb_name,i,0,j,self.pdb_name,res1,self.pdb_name,res2))
-                    f.write('color color{}, {}_p{}_{}_{}\n'.format(i,self.pdb_name,i,0,j))    # 0 present the shortest path
+                for node_index in range(len(paths_[0])-1):                          # the shortest path, separated to overstriking
+                    res1 = top.topology.residue(paths_[0][node_index]).index+1
+                    atom1 = top.topology.select('name CA and resi {}'.format(paths_[0][node_index]))[0] + 1
+                    res2 = top.topology.residue(paths_[0][node_index+1]).index+1
+                    atom2 = top.topology.select('name CA and resi {}'.format(paths_[0][node_index+1]))[0] + 1
+                    f.write('distance {}_p{}_{}_{},{} and idx {},{} and idx {}\n'.format(self.pdb_name,i,0,node_index,self.pdb_name,atom1,self.pdb_name,atom2))
+                    f.write('color color{}, {}_p{}_{}_{}\n'.format(i,self.pdb_name,i,0,node_index))    # 0 present the shortest path
 
-                for j,path in enumerate(paths_):                                     # iter for the same source and sink suboptmal paths
-                    lines = set()                                         # paths line in pymol, using set to remove repetitive line
+                lines = []                                         # paths line in pymol, using set to remove repetitive line
+                for path in paths_[1:]:                                     # iter for the same source and sink suboptmal paths
                     for node_index in range(len(path)-1): 
                         res1 = top.top.residue(path[node_index]).index+1
+                        atom1 = top.topology.select('name CA and resi {}'.format(path[node_index]))[0] + 1
                         res2 = top.top.residue(path[node_index+1]).index+1
-                        lines.add('{}///{}/CA,{}///{}/CA'.format(self.pdb_name,res1,self.pdb_name,res2))
+                        atom2 = top.topology.select('name CA and resi {}'.format(path[node_index+1]))[0] + 1
+                        if '{} and idx {},{} and idx {}'.format(self.pdb_name,atom1,self.pdb_name,atom2) in lines or '{} and idx {},{} and idx {}'.format(self.pdb_name,atom2,self.pdb_name,atom1) in lines:
+                            #print('---',atom1,atom2)
+                            pass
+                        else:
+                            #print('+++',atom1,atom2)
+                            lines.append('{} and idx {},{} and idx {}'.format(self.pdb_name,atom1,self.pdb_name,atom2))
                 for j,line in enumerate(lines):
                     f.write('distance {}_p{}_{}_{},{}\n'.format(self.pdb_name,i,1,j,line))   # 1 present others suboptmal paths
                     f.write('color color{}, {}_p{}_{}_{}\n'.format(i,self.pdb_name,i,1,j))
@@ -518,13 +533,13 @@ class Visualization(object):
         '''
         community = self.network.communities[community_partition]
         pdb_name = ''
-
+        top = md.load(self.pdb)
         with open('{}/{}_community.pml'.format(self.out_dir,self.pdb_name),'w') as f:
             for i,c in enumerate(self.colors):
                 f.write('set_color color{}={}\n'.format(i,c))
             f.write('load {}\n'.format(self.pdb))
             for i in range(len(community)):
-                f.write('color color{}, {} and (resid {})\n'.format(i,self.pdb_name,','.join([str(j+1) for j in community[i]])))
+                f.write('color color{}, {} and (resid {})\n'.format(i,self.pdb_name,','.join([str(top.topology.select('name CA and resi {}'.format(node_index))[0] + 1) for j in community[i]])))
             f.write('bg_color white')
         print('generated {}_community.pml script and you can open it with pymol to show'.format(self.pdb))
 
