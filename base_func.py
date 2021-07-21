@@ -11,10 +11,10 @@ import string
 import scipy as sp
 import matplotlib.pyplot as plt
 import math
-if 'ipykernel' in sys.modules:              #whether the module is running in notebook
-    from tqdm import tqdm_notebook as tqdm
-else:
-    from tqdm import tqdm
+# if 'ipykernel' in sys.modules:              #whether the module is running in notebook
+#     from tqdm import tqdm_notebook as tqdm
+# else:
+from tqdm import tqdm
 
 
 class Network(object):
@@ -209,7 +209,7 @@ class Network(object):
         #total = reduce(lambda x,y:x + y,range(self.residue_num)) + self.residue_num
         
         for i in tqdm(range(self.residue_num),desc='{}'.format(self.residue_num),leave=False,file=sys.stdout,position=0,):
-            for j in tqdm(range(i,self.residue_num),desc='{}'.format(self.residue_num-i),leave=False,file=sys.stdout,position=1):
+            for j in range(i,self.residue_num):
                 CovIJ = np.mean(np.array([np.dot(delta[i,m],delta[j,m]) for m in range(total_frames)]))
                 self.correlation[i,j] = CovIJ/(mean_dot_sqrt[i]*mean_dot_sqrt[j])
                 self.correlation[j,i] = self.correlation[i,j]   
